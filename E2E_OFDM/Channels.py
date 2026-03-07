@@ -1,0 +1,106 @@
+from abc import ABC, abstractmethod
+import numpy as np
+from enum import Enum
+from dataclasses import dataclass
+
+# for choices of arguments, manually select instead of remember names of choices    
+class CHANNEL_MODEL(Enum):
+    RAYLEIGH = "RAYLEIGH"
+    AWGN = "AWGN"
+    NODISTORTION = "NODISTORTION"
+
+@dataclass
+class ChannelConfig:
+    Model: CHANNEL_MODEL
+    NumTap: int 
+    RegenChannel: int       # Channels will change every n blocks
+
+class Channel(ABC):
+    Channels: np.ndarray
+    RegenChannel: int
+    @abstractmethod
+    def process(self, signal: np.ndarray, NumSubCarrier: int) -> np.ndarray:
+        ...
+
+class RayleighChannel(Channel):
+    def __init__(self, config):
+        super().__init__()
+        self.RegenChannel = config.RegenChannel
+        self.NumTap = config.NumTap
+
+    def process(self, signal: np.ndarray, NumSubCarrier: int) -> np.ndarray:
+        Channels = []
+        ChannelOutputs = []
+        NumChannelRealization = int(np.ceil(signal.shape[0]/self.RegenChannel))
+        for i in range(NumChannelRealization):
+            channel = np.sqrt(1/2) * (np.random.randn(1,self.NumTap) + 1j * np.random.randn(1,self.NumTap))
+            THISsignal = signal[i*self.RegenChannel:(i+1)*self.RegenChannel]
+            Output = np.array([np.convolve(row, channel.reshape(-1), mode='full') for row in THISsignal])
+            Channels.append(channel)
+            ChannelOutputs.append(Output)
+        Channels = np.concatenate(Channels, axis=0)
+        self.Channels = np.concat((Channels, np.zeros((NumChannelRealization,NumSubCarrier-self.NumTap))), axis=1)
+        ChannelOutputs = np.concatenate(ChannelOutputs, axis=0)
+        return ChannelOutputs
+    
+class AWGNChannel(Channel):
+    def __init__(self, SNR: int):
+        super().__init__()
+        self.SNR = SNR
+        self.Channels = np.ndarray(1)
+
+    def process(self, signal: np.ndarray, NumSubCarrier: int) -> np.ndarray:
+        SNRlinear = 10 ** (self.SNR / 10)
+        SignalPower = np.mean(np.abs(signal) ** 2, axis=0)
+        NoisePower = SignalPower / SNRlinear
+        Noise = np.dot((np.random.randn(signal.shape[0], signal.shape[1]) + 1j * np.random.randn(signal.shape[0], signal.shape[1])), np.diag(np.sqrt(NoisePower / 2)))
+        self.Noise = Noise
+        ChannelOutput = signal + Noise
+        return ChannelOutput
+    
+class NoDistortionChannel(Channel):
+    def __init__(self):
+        super().__init__()
+        self.Channel = np.ndarray(1)
+
+    def process(self, signal):
+        ChannelOutput = signal
+        return ChannelOutput
+    
+def SelectChannelModel(config: ChannelConfig) -> Channel:
+    if config.Model == CHANNEL_MODEL.RAYLEIGH: 
+        return RayleighChannel(config)
+    elif config.Model == CHANNEL_MODEL.AWGN: 
+        return NoDistortionChannel()  # Noise will be added later
+    elif config.Model == CHANNEL_MODEL.NODISTORTION: 
+        return NoDistortionChannel()
+    else: raise ValueError("Unsuport channel model")
+
+if __name__ == '__main__':
+    
+    from dataclasses import dataclass
+    
+    @dataclass
+    class AWGNChannelConfig():
+        SNR: int = -6
+        NumMC: int = 100000
+        SeqLength: int = 10
+
+    class TestAWGNChannel():
+        def __init__(self, config) -> None:
+            self.NumMC = config.NumMC
+            self.SeqLength = config.SeqLength
+            self.AddNoise = AWGNChannel(config.SNR)
+
+        def run(self):
+            symbols = np.random.randn(self.NumMC, self.SeqLength) + 1j * np.random.randn(self.NumMC, self.SeqLength)
+            NoisySymbols = self.AddNoise.process(symbols, symbols.shape[1])
+            NoisePower = np.mean(np.abs(self.AddNoise.Noise) ** 2, axis=0)
+            SymbolPower = np.mean(np.abs(symbols) ** 2, axis=0)
+            EstimatedSNR = 10 * np.log10(SymbolPower / NoisePower)
+            SNRError = EstimatedSNR - self.AddNoise.SNR
+            return SNRError
+
+    config1 = AWGNChannelConfig()
+    SNRError = TestAWGNChannel(config1).run()
+    print("SNR Error: {}".format(SNRError))
