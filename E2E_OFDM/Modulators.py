@@ -62,19 +62,19 @@ def SelectModulator(modulation_type: QAM_MODULATION) -> Modulator:
     else: raise ValueError("Unsupported modulation")
 
 class OFDMModulator(Modulator):
-    def __init__(self, LengthCP):
+    def __init__(self, LengthCP, NumSubCarrier):
         super().__init__()
         self.LengthCP = LengthCP
+        self.NumSubCarrier = NumSubCarrier
 
     def modulate(self, symbols: np.ndarray) -> np.ndarray:
         IFFTSequence = np.fft.ifft(symbols, norm='ortho')  # IFFT = modulate each symbols with orthogonal frequencies and sum
-        self.SequenceLength = IFFTSequence.shape[1]
         CP = IFFTSequence[:,-self.LengthCP:]
         OFDMSymbols = np.concatenate([CP, IFFTSequence], axis=1)
         return OFDMSymbols
     
     def demodulate(self, OFDMSymbols: np.ndarray) -> np.ndarray:
-        CPR = OFDMSymbols[:,self.LengthCP:self.SequenceLength+self.LengthCP]
+        CPR = OFDMSymbols[:,self.LengthCP:self.NumSubCarrier+self.LengthCP]
         DemodulatedSymbols = np.fft.fft(CPR, norm='ortho')
         return DemodulatedSymbols
 
@@ -93,13 +93,14 @@ if __name__ == '__main__':
     class TestModulator():
         def __init__(self, config) -> None:
             self.modulator = SelectModulator(config.ModulatorType)
-            self.Noise = AWGNChannel(config.SNR)
+            self.NoiseMixer = NoiseMixer()
+            self.SNR = config.SNR
             self.Evaluater = BER()
         
         def run(self):
             bits = np.random.randint(0, 2, config.NumBits)
             ModulatedSymbols = self.modulator.modulate(bits)
-            NoisySymbols = self.Noise.process(ModulatedSymbols, ModulatedSymbols.shape[1])
+            NoisySymbols = self.NoiseMixer.process(ModulatedSymbols, self.SNR)
             EstimatedBits = self.modulator.demodulate(NoisySymbols)
             BERResult = self.Evaluater.process(EstimatedBits, bits)
             return BERResult

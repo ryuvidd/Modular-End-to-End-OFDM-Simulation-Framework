@@ -17,10 +17,21 @@ class ChannelConfig:
 
 class Channel(ABC):
     Channels: np.ndarray
+    Channels_feq: np.ndarray
     RegenChannel: int
     @abstractmethod
     def process(self, signal: np.ndarray, NumSubCarrier: int) -> np.ndarray:
         ...
+
+class NoiseMixer():
+    def process(self, signal: np.ndarray, SNR: float) -> np.ndarray:
+        SNRlinear = 10 ** (SNR / 10)
+        SignalPower = np.mean(np.abs(signal) ** 2, axis=0)
+        NoisePower = SignalPower / SNRlinear
+        Noise = np.dot((np.random.randn(signal.shape[0], signal.shape[1]) + 1j * np.random.randn(signal.shape[0], signal.shape[1])), np.diag(np.sqrt(NoisePower / 2)))
+        self.Noise = Noise
+        ChannelOutput = signal + Noise
+        return ChannelOutput
 
 class RayleighChannel(Channel):
     def __init__(self, config):
@@ -39,41 +50,48 @@ class RayleighChannel(Channel):
             Channels.append(channel)
             ChannelOutputs.append(Output)
         Channels = np.concatenate(Channels, axis=0)
-        self.Channels = np.concat((Channels, np.zeros((NumChannelRealization,NumSubCarrier-self.NumTap))), axis=1)
+        Channels = np.concat((Channels, np.zeros((NumChannelRealization,NumSubCarrier-self.NumTap))), axis=1)
+        self.Channels_feq = np.repeat(np.fft.fft(Channels), self.RegenChannel, axis=0)
         ChannelOutputs = np.concatenate(ChannelOutputs, axis=0)
         return ChannelOutputs
     
 class AWGNChannel(Channel):
-    def __init__(self, SNR: int):
-        super().__init__()
-        self.SNR = SNR
-        self.Channels = np.ndarray(1)
-
-    def process(self, signal: np.ndarray, NumSubCarrier: int) -> np.ndarray:
-        SNRlinear = 10 ** (self.SNR / 10)
-        SignalPower = np.mean(np.abs(signal) ** 2, axis=0)
-        NoisePower = SignalPower / SNRlinear
-        Noise = np.dot((np.random.randn(signal.shape[0], signal.shape[1]) + 1j * np.random.randn(signal.shape[0], signal.shape[1])), np.diag(np.sqrt(NoisePower / 2)))
-        self.Noise = Noise
-        ChannelOutput = signal + Noise
-        return ChannelOutput
-    
-class NoDistortionChannel(Channel):
+    # For AWGN channel, the noise corruption will be processed at the stage of mixing noise eventually.
+    # So this acts like a no distortion channel first.
     def __init__(self):
         super().__init__()
-        self.Channel = np.ndarray(1)
+        self.Channels = np.ndarray(1)
 
-    def process(self, signal):
+    def process(self, signal: np.ndarray) -> np.ndarray:
         ChannelOutput = signal
         return ChannelOutput
+    
+class AWGNChannelStandAlone(Channel):
+    def __init__(self):
+        super().__init__()
+        self.Channels = np.ndarray(1)
+        self.NoiseGenerator = NoiseMixer()
+
+    def process(self, signal: np.ndarray, SNR: float) -> np.ndarray:
+        ChannelOutput, Noise = self.NoiseGenerator.process(signal, SNR)
+        return ChannelOutput
+    
+# class NoDistortionChannel(Channel):
+#     def __init__(self):
+#         super().__init__()
+#         self.Channel = np.ndarray(1)
+
+#     def process(self, signal: np.ndarray) -> np.ndarray:
+#         ChannelOutput = signal
+#         return ChannelOutput
     
 def SelectChannelModel(config: ChannelConfig) -> Channel:
     if config.Model == CHANNEL_MODEL.RAYLEIGH: 
         return RayleighChannel(config)
     elif config.Model == CHANNEL_MODEL.AWGN: 
-        return NoDistortionChannel()  # Noise will be added later
-    elif config.Model == CHANNEL_MODEL.NODISTORTION: 
-        return NoDistortionChannel()
+        return AWGNChannel()  # Noise will be added later
+    # elif config.Model == CHANNEL_MODEL.NODISTORTION: 
+    #     return NoDistortionChannel()
     else: raise ValueError("Unsuport channel model")
 
 if __name__ == '__main__':
@@ -90,15 +108,16 @@ if __name__ == '__main__':
         def __init__(self, config) -> None:
             self.NumMC = config.NumMC
             self.SeqLength = config.SeqLength
-            self.AddNoise = AWGNChannel(config.SNR)
+            self.SNR = config.SNR
+            self.NoiseMixer = NoiseMixer()
 
         def run(self):
-            symbols = np.random.randn(self.NumMC, self.SeqLength) + 1j * np.random.randn(self.NumMC, self.SeqLength)
-            NoisySymbols = self.AddNoise.process(symbols, symbols.shape[1])
-            NoisePower = np.mean(np.abs(self.AddNoise.Noise) ** 2, axis=0)
+            symbols = np.random.randn(self.NumMC, self.SeqLength) + np.random.randn(self.NumMC, self.SeqLength) * 1j
+            NoisySymbols= self.NoiseMixer.process(symbols, self.SNR)
+            NoisePower = np.mean(np.abs(self.NoiseMixer.Noise) ** 2, axis=0)
             SymbolPower = np.mean(np.abs(symbols) ** 2, axis=0)
             EstimatedSNR = 10 * np.log10(SymbolPower / NoisePower)
-            SNRError = EstimatedSNR - self.AddNoise.SNR
+            SNRError = EstimatedSNR - self.SNR
             return SNRError
 
     config1 = AWGNChannelConfig()

@@ -5,8 +5,8 @@ from typing import Optional
 
 @dataclass
 class EvaluationResults:
-    BER: Optional[float] = None
-    ChannelNMSE: Optional[float] = None
+    BER: Optional[np.ndarray] = None
+    ChannelNMSE: Optional[np.ndarray] = None
 
 @dataclass
 class ExperimentData:
@@ -30,13 +30,24 @@ class NMSE(Evaluator):
         return float(NMSEdB)
     
 class TotalEvaluators:
-    def __init__(self):
+    def __init__(self, SNR):
         self.BEREvaluator = BER()
         self.ChannelEstimateEvaluator = NMSE()
+        self.SNR = SNR
 
     def process(self, Estimated: ExperimentData, GroundTruth: ExperimentData) -> EvaluationResults:
+        
+        TotalBER = []
+        TotalChannelNMSE = []
+        for snr_ind in range(len(self.SNR)):
+            BER_ = self.BEREvaluator.process(Estimated.Bits[snr_ind], GroundTruth.Bits[snr_ind])
+            ChannelNMSE_ = self.ChannelEstimateEvaluator.process(Estimated.Channel[snr_ind], GroundTruth.Channel[snr_ind])
+            
+            TotalBER.append(BER_)
+            TotalChannelNMSE.append(ChannelNMSE_)
+        
         results = EvaluationResults()
-        results.BER = self.BEREvaluator.process(Estimated.Bits, GroundTruth.Bits)
-        results.ChannelNMSE = self.ChannelEstimateEvaluator.process(Estimated.Channel, GroundTruth.Channel)
+        results.BER = np.array(TotalBER)
+        results.ChannelNMSE = np.array(TotalChannelNMSE)
         return results
     
