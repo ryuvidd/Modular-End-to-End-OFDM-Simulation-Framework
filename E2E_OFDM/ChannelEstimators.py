@@ -28,19 +28,22 @@ class LSEstimator(Estimator):
             where=Pilot != 0
         )
 
-        x = np.arange(EstimatedChannel.shape[1])
+        ## INTERPOLATION ##
+        # x = np.arange(EstimatedChannel.shape[1])
 
-        for i in range(EstimatedChannel.shape[0]):
-            row = EstimatedChannel[i]
-            mask = ~np.isnan(row)
+        # for i in range(EstimatedChannel.shape[0]):
+        #     row = EstimatedChannel[i]
+        #     mask = ~np.isnan(row)
 
-            EstimatedChannel[i].real = np.interp(x, x[mask], row.real[mask])
-            EstimatedChannel[i].imag = np.interp(x, x[mask], row.imag[mask])
+        #     EstimatedChannel[i].real = np.interp(x, x[mask], row.real[mask])
+        #     EstimatedChannel[i].imag = np.interp(x, x[mask], row.imag[mask])
 
         return EstimatedChannel
     
 class LMMSEEstimator(Estimator):
     def process(self, RxSignal: np.ndarray, Pilot: np.ndarray) -> np.ndarray:
+        a = 2
+
         EstimatedChannel = RxSignal + Pilot   # to be edited
         return EstimatedChannel
 

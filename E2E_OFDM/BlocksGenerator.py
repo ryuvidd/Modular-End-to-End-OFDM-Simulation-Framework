@@ -15,10 +15,9 @@ class BlockConfig:
     NumPilotPerBlock: int
     PilotTypes: PILOT_TYPES
 
-
 # Here says BitsGenerator is a 'block', therefore it enforces the only method called 'process'.    
 class BitsGenerator():
-    def process(self, NumBlocks, NumBit) -> np.ndarray:
+    def process(self, NumBlocks: int, NumBit: int) -> np.ndarray:
         return np.random.randint(0, 2, [NumBlocks, NumBit])
 
 class BlockGenerators(ABC):
@@ -44,7 +43,7 @@ class BlockTypePilot(BlockGenerators):
         Blocks[1:,:] = Data
         return Blocks, Data
     
-class CombTypePilot(BlockGenerators):  #### CONTINUE HERE, blocks.shape (2, 16) but pilotindices.shape (2, 8)
+class CombTypePilot(BlockGenerators):
     def process(self, BitsPerSymbol: int) -> tuple:
         self.PilotIndices[:,::self.NumSubCarrier//self.NumPilotPerBlock] = 1
         mask = np.repeat(self.PilotIndices, BitsPerSymbol, axis=1)
@@ -83,4 +82,5 @@ if __name__ == '__main__':
             return Blocks
 
     system = TestBlockGen(blckconfig, QAM_MODULATION.QPSK_GRAY)
-    system.run()
+    result = system.run()
+    print(result)

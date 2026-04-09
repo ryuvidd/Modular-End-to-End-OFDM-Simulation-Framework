@@ -1,18 +1,29 @@
 import numpy as np
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from enum import Enum
 
-# It's like declare the template of this 'block'. 
-# Here says it is a 'Block' which has ONLY method (responsiblity) named 'process'.
+class EQUALIZER(Enum):
+    ZeroForcing = "ZeroForcing"
+    MMSE = "MMSE"
+
 class Equalizer(ABC):
 
     @abstractmethod
-    def process(self, signal):
+    def process(self, EstimatedChannel: np.ndarray, ReceivedSignal: np.ndarray):
         ...
 
 class ZeroForcing(Equalizer):
     def process(self, EstimatedChannel, ReceivedSignal):
         RecoveredSymbols = ReceivedSignal / EstimatedChannel
         return RecoveredSymbols
+    
+class MMSE(Equalizer):
+    def process(self, EstimatedChannel, ReceivedSignal):
+        RecoveredSymbols = ReceivedSignal / EstimatedChannel
+        return RecoveredSymbols
+    
+def SelectEqualizer(equalizer: EQUALIZER) -> Equalizer:
+    if equalizer == EQUALIZER.ZeroForcing: return ZeroForcing()
+    elif equalizer == EQUALIZER.MMSE: return MMSE()
+    else: raise ValueError("Unsuport equalizer")
     
