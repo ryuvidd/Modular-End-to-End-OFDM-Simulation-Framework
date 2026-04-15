@@ -156,11 +156,11 @@ if __name__ == '__main__':
         SNR=OFDMconfig.SNR, 
         BER=MergedResults["BERs"], 
         label=labels,
-        save_fig_name='results/BER_.png'
+        save_fig_name='results/BER.png'
     )
     CurvesPlotter.plot_NMSE(
         SNR=OFDMconfig.SNR, 
         NMSE=MergedResults["ChannelNMSEs"], 
         label=labels,
-        save_fig_name='results/NMSE_.png'
+        save_fig_name='results/NMSE.png'
     )            
