@@ -107,12 +107,12 @@ if __name__ == '__main__':
             self.Plotter = Plotter()
 
         def run(self):
-            logging.info("Initialize OFDM system")
             OFDMSymbols, DataBits, config = self.Transmitter.process(self.OFDMconfig)
             logging.info("Transmitted signals")
             ReceivedSignals, config = self.ChannelBlock.process(OFDMSymbols, config)
             logging.info("Received signals and start recovering signal")
             EstimatedBits, EstimatedChannels = self.Receiver.process(ReceivedSignals, config)
+            logging.info("Data recovered")
 
             # Duplicate for each SNR
             DataBits = np.tile(DataBits, (len(self.OFDMconfig.SNR),1,1))
@@ -137,8 +137,10 @@ if __name__ == '__main__':
     BERs = []
     NMSEs = []
     for k in range(len(totalconfig)):
+        logging.info(f"===== Initialize OFDM system {k+1} =====")
         system = OFDMSystem(totalconfig[k])
         result = system.run()
+        logging.info(f"===== Successfully simulate OFDM system {k+1} =====\n")
         BERs.append(result.BER)
         NMSEs.append(result.ChannelNMSE)
 
@@ -147,18 +149,18 @@ if __name__ == '__main__':
         "ChannelNMSEs": np.stack(NMSEs, axis=0)
     }
 
-    logging.info("Visualizing results")
+    logging.info("Visualizing results\n")
     CurvesPlotter = Plotter()
     labels = ["LS", "LMMSE"]
     CurvesPlotter.plot_BER(
         SNR=OFDMconfig.SNR, 
         BER=MergedResults["BERs"], 
         label=labels,
-        save_fig_name='results/BER.png'
+        save_fig_name='results/BER_.png'
     )
     CurvesPlotter.plot_NMSE(
         SNR=OFDMconfig.SNR, 
         NMSE=MergedResults["ChannelNMSEs"], 
         label=labels,
-        save_fig_name='results/NMSE.png'
+        save_fig_name='results/NMSE_.png'
     )            
