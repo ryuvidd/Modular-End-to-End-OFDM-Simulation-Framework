@@ -10,12 +10,12 @@ class CHANNEL_ESTIMATOR(Enum):
 class Estimator(ABC):
 
     @abstractmethod
-    def process(self, Rxsignal: np.ndarray, pilot: np.ndarray) -> np.ndarray:
+    def process(self, Rxsignal: np.ndarray, pilot: np.ndarray, metadata) -> np.ndarray:
         ...
     
 class LSEstimator(Estimator):
 
-    def process(self, RxSignal: np.ndarray, Pilot: np.ndarray) -> np.ndarray:
+    def process(self, RxSignal: np.ndarray, Pilot: np.ndarray, metadata) -> np.ndarray:
         
         # A = Pilot
         # temp = torch.linalg.pinv(torch.conj(A.T) @ A) @ torch.conj(A.T)
@@ -41,10 +41,23 @@ class LSEstimator(Estimator):
         return EstimatedChannel
     
 class LMMSEEstimator(Estimator):
-    def process(self, RxSignal: np.ndarray, Pilot: np.ndarray) -> np.ndarray:
-        a = 2
+    def process(self, RxSignal: np.ndarray, Pilot: np.ndarray, metadata) -> np.ndarray:
+        LengthCP = metadata["LengthCP"]
+        VarNoise = metadata["VarNoise"]
+        ActualChan = metadata["ChannelsFreqDomain"]
+        ActualChan = ActualChan[:, :, np.newaxis]
+        Pilot = Pilot[:, :, np.newaxis] * np.eye(Pilot.shape[1])
 
-        EstimatedChannel = RxSignal + Pilot   # to be edited
+        mean_h = np.mean(ActualChan, axis=0)
+        R_hh = np.mean(ActualChan @ np.transpose(ActualChan,(0,2,1)).conj(), axis=0)
+        NoisePower = VarNoise[LengthCP:LengthCP+RxSignal.shape[1],LengthCP:LengthCP+RxSignal.shape[1]]
+
+        EstimatedChannel = np.zeros_like(RxSignal, dtype=complex)
+        for i in range(RxSignal.shape[0]):
+            X = Pilot[i]
+            y = RxSignal[i].reshape(-1,1)
+            THISEstimatedChannel = mean_h + R_hh @ X.conj().T @ np.linalg.inv(X @ R_hh @ X.conj().T + NoisePower) @ (y - X @ mean_h)
+            EstimatedChannel[i] = THISEstimatedChannel.reshape(-1)
         return EstimatedChannel
 
 

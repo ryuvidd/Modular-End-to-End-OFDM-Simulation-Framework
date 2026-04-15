@@ -1,12 +1,11 @@
 import numpy as np
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
 
 @dataclass
 class EvaluationResults:
-    BER: Optional[np.ndarray] = None
-    ChannelNMSE: Optional[np.ndarray] = None
+    BER: np.ndarray
+    ChannelNMSE: np.ndarray
 
 @dataclass
 class ExperimentData:
@@ -46,8 +45,9 @@ class TotalEvaluators:
             TotalBER.append(BER_)
             TotalChannelNMSE.append(ChannelNMSE_)
         
-        results = EvaluationResults()
-        results.BER = np.array(TotalBER)
-        results.ChannelNMSE = np.array(TotalChannelNMSE)
+        results = EvaluationResults(
+            BER=np.array(TotalBER),
+            ChannelNMSE=np.array(TotalChannelNMSE)
+        )
         return results
     
