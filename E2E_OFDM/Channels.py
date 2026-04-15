@@ -24,12 +24,16 @@ class Channel(ABC):
         ...
 
 class NoiseMixer():
+    def __init__(self) -> None:
+        self.VarNoises = []
+
     def process(self, signal: np.ndarray, SNR: float) -> np.ndarray:
         SNRlinear = 10 ** (SNR / 10)
         SignalPower = np.mean(np.abs(signal) ** 2, axis=0)
         NoisePower = SignalPower / SNRlinear
         Noise = np.dot((np.random.randn(signal.shape[0], signal.shape[1]) + 1j * np.random.randn(signal.shape[0], signal.shape[1])), np.diag(np.sqrt(NoisePower / 2)))
         self.Noise = Noise
+        self.VarNoises.append(np.diag(NoisePower))
         ChannelOutput = signal + Noise
         return ChannelOutput
 
@@ -66,32 +70,11 @@ class AWGNChannel(Channel):
         ChannelOutput = signal
         return ChannelOutput
     
-class AWGNChannelStandAlone(Channel):
-    def __init__(self):
-        super().__init__()
-        self.Channels = np.ndarray(1)
-        self.NoiseGenerator = NoiseMixer()
-
-    def process(self, signal: np.ndarray, SNR: float) -> np.ndarray:
-        ChannelOutput, Noise = self.NoiseGenerator.process(signal, SNR)
-        return ChannelOutput
-    
-# class NoDistortionChannel(Channel):
-#     def __init__(self):
-#         super().__init__()
-#         self.Channel = np.ndarray(1)
-
-#     def process(self, signal: np.ndarray) -> np.ndarray:
-#         ChannelOutput = signal
-#         return ChannelOutput
-    
 def SelectChannelModel(config: ChannelConfig) -> Channel:
     if config.Model == CHANNEL_MODEL.RAYLEIGH: 
         return RayleighChannel(config)
     elif config.Model == CHANNEL_MODEL.AWGN: 
-        return AWGNChannel()  # Noise will be added later
-    # elif config.Model == CHANNEL_MODEL.NODISTORTION: 
-    #     return NoDistortionChannel()
+        return AWGNChannel() 
     else: raise ValueError("Unsuport channel model")
 
 if __name__ == '__main__':

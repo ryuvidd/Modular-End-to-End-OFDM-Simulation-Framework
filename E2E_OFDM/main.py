@@ -14,9 +14,9 @@ if __name__ == '__main__':
     class OFDMconfig:
         NumSubCarrier: int = 64
         TotalNumBlock: int = 10000
-        NumPilotPerBlock: int = 16
+        NumPilotPerBlock: int = 32
         QAMModulation: QAM_MODULATION = QAM_MODULATION.QPSK_GRAY
-        LengthCP: int = 4
+        LengthCP: int = 8
         SNR: np.ndarray = np.arange(-10,11,2)
         BlockConfiguration: BlockConfig = BlockConfig(
             NumSubCarrier = NumSubCarrier, 
@@ -26,7 +26,7 @@ if __name__ == '__main__':
         )
         ChannelBlockConfig = ChannelConfig(
             Model = CHANNEL_MODEL.RAYLEIGH,
-            NumTap = 3,
+            NumTap = 5,
             RegenChannel = 5
         )
         Estimator: CHANNEL_ESTIMATOR = CHANNEL_ESTIMATOR.LS
@@ -53,12 +53,13 @@ if __name__ == '__main__':
 
         def process(self, OFDMSymbols: np.ndarray, OFDMconfig) -> tuple:
             ChannelOutput = self.ChannelGenerator.process(OFDMSymbols, OFDMconfig.NumSubCarrier)
-            ChannelsFreq = self.ChannelGenerator.Channels_feq
             ReceivedSignals = []
             for snr in OFDMconfig.SNR:
                 ReceivedSignals.append(self.NoiseMixer.process(ChannelOutput, snr))
             ReceivedSignals = np.stack(ReceivedSignals, axis=0)
-            return ReceivedSignals, ChannelsFreq
+            OFDMconfig.VarNoises = np.stack(self.NoiseMixer.VarNoises, axis=0)
+            OFDMconfig.ChannelsFreqDomain = self.ChannelGenerator.Channels_feq
+            return ReceivedSignals, OFDMconfig
         
     class Receiver():
         def __init__(self, config) -> None:
@@ -78,7 +79,12 @@ if __name__ == '__main__':
                 # Channel Estimation #
                 ReceivedPilots = np.where(PilotIndices, ReceivedSymbols, 0)
                 TransmittedPilots = np.where(PilotIndices, OFDMconfig.TransmittedSymbols, 0)
-                EstimatedChannel = self.ChannelEstimator.process(ReceivedPilots, TransmittedPilots)
+                metadata = {
+                    "VarNoise": OFDMconfig.VarNoises[snr_ind],
+                    "ChannelsFreqDomain": OFDMconfig.ChannelsFreqDomain,
+                    "LengthCP": OFDMconfig.LengthCP
+                }
+                EstimatedChannel = self.ChannelEstimator.process(ReceivedPilots, TransmittedPilots, metadata)
                 EstimatedChannel = self.ChannelInterpolator.process(EstimatedChannel)
                 EstimatedChannels.append(EstimatedChannel)
                 # Equalization #
@@ -104,13 +110,13 @@ if __name__ == '__main__':
             logging.info("Initialize OFDM system")
             OFDMSymbols, DataBits, config = self.Transmitter.process(self.OFDMconfig)
             logging.info("Transmitted signals")
-            ReceivedSignals, ChannelFreqDomain = self.ChannelBlock.process(OFDMSymbols, config)
+            ReceivedSignals, config = self.ChannelBlock.process(OFDMSymbols, config)
             logging.info("Received signals and start recovering signal")
             EstimatedBits, EstimatedChannels = self.Receiver.process(ReceivedSignals, config)
 
             # Duplicate for each SNR
             DataBits = np.tile(DataBits, (len(self.OFDMconfig.SNR),1,1))
-            ChannelFreqDomain = np.tile(ChannelFreqDomain, (len(self.OFDMconfig.SNR),1,1))
+            ChannelFreqDomain = np.tile(config.ChannelsFreqDomain, (len(self.OFDMconfig.SNR),1,1))
 
             EstimatedData = ExperimentData(
                 Bits=EstimatedBits, 
@@ -121,10 +127,38 @@ if __name__ == '__main__':
                 Channel=ChannelFreqDomain
             )
             results = self.Evaluater.process(EstimatedData, GroundTruthData)
+            return results
 
-            logging.info("Visualizing results")
-            self.Plotter.plot_BER(self.OFDMconfig.SNR, results.BER, save_fig_name='results/BER.png')            
-            self.Plotter.plot_NMSE(self.OFDMconfig.SNR, results.ChannelNMSE, save_fig_name='results/NMSE.png')            
+    totalconfig = [
+        OFDMconfig(Estimator=CHANNEL_ESTIMATOR.LS),
+        OFDMconfig(Estimator=CHANNEL_ESTIMATOR.LMMSE)
+    ]
 
-    system = OFDMSystem(OFDMconfig)
-    system.run()
+    BERs = []
+    NMSEs = []
+    for k in range(len(totalconfig)):
+        system = OFDMSystem(totalconfig[k])
+        result = system.run()
+        BERs.append(result.BER)
+        NMSEs.append(result.ChannelNMSE)
+
+    MergedResults = {
+        "BERs": np.stack(BERs, axis=0),
+        "ChannelNMSEs": np.stack(NMSEs, axis=0)
+    }
+
+    logging.info("Visualizing results")
+    CurvesPlotter = Plotter()
+    labels = ["LS", "LMMSE"]
+    CurvesPlotter.plot_BER(
+        SNR=OFDMconfig.SNR, 
+        BER=MergedResults["BERs"], 
+        label=labels,
+        save_fig_name='results/BER.png'
+    )
+    CurvesPlotter.plot_NMSE(
+        SNR=OFDMconfig.SNR, 
+        NMSE=MergedResults["ChannelNMSEs"], 
+        label=labels,
+        save_fig_name='results/NMSE.png'
+    )            
