@@ -37,11 +37,13 @@ if __name__ == '__main__':
             self.BlocksGenerator = SelectPilotType(config.BlockConfiguration)
             self.Modulator = SelectModulator(config.QAMModulation)
             self.OFDMModulator = OFDMModulator(config.LengthCP, config.NumSubCarrier)
+            self.SpectrumViewer = SpectrumAnalyzer()
 
         def process(self, OFDMconfig) -> tuple:
             Blocks, DataBits = self.BlocksGenerator.process(self.Modulator.bitsPerSymbol)
             TransmittedSymbols = self.Modulator.modulate(Blocks)
             OFDMSymbols = self.OFDMModulator.modulate(TransmittedSymbols)
+            self.SpectrumViewer.PlotPSD(OFDMSymbols)
             OFDMconfig.PilotIndices = self.BlocksGenerator.PilotIndices
             OFDMconfig.TransmittedSymbols = TransmittedSymbols
             return OFDMSymbols, DataBits, OFDMconfig
@@ -156,11 +158,11 @@ if __name__ == '__main__':
         SNR=OFDMconfig.SNR, 
         BER=MergedResults["BERs"], 
         label=labels,
-        save_fig_name='results/BER.png'
+        save_fig_name='results/BER__.png'
     )
     CurvesPlotter.plot_NMSE(
         SNR=OFDMconfig.SNR, 
         NMSE=MergedResults["ChannelNMSEs"], 
         label=labels,
-        save_fig_name='results/NMSE.png'
+        save_fig_name='results/NMSE__.png'
     )            
