@@ -1,4 +1,4 @@
-# End-to-End OFDM Simulation Framework
+# Modular End-to-End OFDM Simulation Framework
 
 ## 📌 Overview
 
