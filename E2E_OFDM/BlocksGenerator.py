@@ -1,6 +1,5 @@
 import numpy as np
 from enum import Enum
-from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from Modulators import *   
 
@@ -8,20 +7,13 @@ class PILOT_TYPES(Enum):
     BLOCK = "BlockTypePilot"
     COMB = "CombTypePilot"
 
-@dataclass
-class BlockConfig:
-    NumSubCarrier: int 
-    TotalNumBlock: int
-    NumPilotPerBlock: int
-    PilotTypes: PILOT_TYPES
-
 # Here says BitsGenerator is a 'block', therefore it enforces the only method called 'process'.    
 class BitsGenerator():
     def process(self, NumBlocks: int, NumBit: int) -> np.ndarray:
         return np.random.randint(0, 2, [NumBlocks, NumBit])
 
 class BlockGenerators(ABC):
-    def __init__(self, config: BlockConfig):
+    def __init__(self, config):
         self.TotalNumBlock = config.TotalNumBlock
         self.NumSubCarrier = config.NumSubCarrier
         self.NumPilotPerBlock = config.NumPilotPerBlock
@@ -56,7 +48,7 @@ class CombTypePilot(BlockGenerators):
         Blocks[~mask] = Data.reshape(-1)
         return Blocks, Data
 
-def SelectPilotType(config: BlockConfig) -> BlockGenerators:
+def SelectPilotType(config) -> BlockGenerators:
     if config.PilotTypes == PILOT_TYPES.BLOCK: 
         return BlockTypePilot(config)
     elif config.PilotTypes == PILOT_TYPES.COMB: 
@@ -65,12 +57,11 @@ def SelectPilotType(config: BlockConfig) -> BlockGenerators:
 
 if __name__ == '__main__':
 
-    blckconfig = BlockConfig(
+    class blckconfig:
         NumSubCarrier = 8,
         TotalNumBlock = 6,
         NumPilotPerBlock = 2,
         PilotTypes = PILOT_TYPES.BLOCK
-    )
 
     class TestBlockGen():
         def __init__(self, blckconfig, QAMMapper):
