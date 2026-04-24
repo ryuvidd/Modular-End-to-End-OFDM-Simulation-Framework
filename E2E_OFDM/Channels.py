@@ -9,12 +9,6 @@ class CHANNEL_MODEL(Enum):
     AWGN = "AWGN"
     NODISTORTION = "NODISTORTION"
 
-@dataclass
-class ChannelConfig:
-    Model: CHANNEL_MODEL
-    NumTap: int 
-    RegenChannel: int       # Channels will change every n blocks
-
 class Channel(ABC):
     Channels: np.ndarray
     Channels_feq: np.ndarray
@@ -70,10 +64,10 @@ class AWGNChannel(Channel):
         ChannelOutput = signal
         return ChannelOutput
     
-def SelectChannelModel(config: ChannelConfig) -> Channel:
-    if config.Model == CHANNEL_MODEL.RAYLEIGH: 
+def SelectChannelModel(config) -> Channel:
+    if config.ChannelModel == CHANNEL_MODEL.RAYLEIGH: 
         return RayleighChannel(config)
-    elif config.Model == CHANNEL_MODEL.AWGN: 
+    elif config.ChannelModel == CHANNEL_MODEL.AWGN: 
         return AWGNChannel() 
     else: raise ValueError("Unsuport channel model")
 
