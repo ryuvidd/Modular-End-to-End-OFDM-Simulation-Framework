@@ -77,5 +77,5 @@ class SpectrumAnalyzer():
         plt.title('Power Spectral Density')
         
         plt.tight_layout()
-        plt.savefig('results/PSD_transmitted_signal.png', dpi=300)
+        plt.savefig('results/PSD_transmitted_signal_.png', dpi=300)
 
