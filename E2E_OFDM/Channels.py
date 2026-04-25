@@ -14,7 +14,7 @@ class Channel(ABC):
     Channels_feq: np.ndarray
     RegenChannel: int
     @abstractmethod
-    def process(self, signal: np.ndarray, NumSubCarrier: int) -> np.ndarray:
+    def process(self, signal: np.ndarray, NumSubCarrier: int) -> tuple:
         ...
 
 class NoiseMixer():
@@ -37,10 +37,10 @@ class RayleighChannel(Channel):
         self.RegenChannel = config.RegenChannel
         self.NumTap = config.NumTap
 
-    def process(self, signal: np.ndarray, NumSubCarrier: int) -> np.ndarray:
+    def process(self, signal: np.ndarray, NumChannelRealization: int) -> tuple:
         Channels = []
         ChannelOutputs = []
-        NumChannelRealization = int(np.ceil(signal.shape[0]/self.RegenChannel))
+        # NumChannelRealization = int(np.ceil(signal.shape[0]/self.RegenChannel))
         for i in range(NumChannelRealization):
             channel = np.sqrt(1/2) * (np.random.randn(1,self.NumTap) + 1j * np.random.randn(1,self.NumTap))
             THISsignal = signal[i*self.RegenChannel:(i+1)*self.RegenChannel]
@@ -48,10 +48,10 @@ class RayleighChannel(Channel):
             Channels.append(channel)
             ChannelOutputs.append(Output)
         Channels = np.concatenate(Channels, axis=0)
-        Channels = np.concat((Channels, np.zeros((NumChannelRealization,NumSubCarrier-self.NumTap))), axis=1)
-        self.Channels_feq = np.repeat(np.fft.fft(Channels), self.RegenChannel, axis=0)
+        # Channels = np.concat((Channels, np.zeros((NumChannelRealization,NumSubCarrier-self.NumTap))), axis=1)
+        # self.Channels_feq = np.repeat(np.fft.fft(Channels), self.RegenChannel, axis=0)
         ChannelOutputs = np.concatenate(ChannelOutputs, axis=0)
-        return ChannelOutputs
+        return ChannelOutputs, Channels
     
 class AWGNChannel(Channel):
     # For AWGN channel, the noise corruption will be processed at the stage of mixing noise eventually.

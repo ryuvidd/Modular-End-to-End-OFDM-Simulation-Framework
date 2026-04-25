@@ -4,16 +4,16 @@ from dataclasses import replace
 if __name__ == '__main__':
 
     default_config = OFDMconfig(
-        NumSubCarrier = 64,
-        TotalNumBlock = 10000,
-        NumPilotPerBlock = 32,
+        NumSubCarrier = 64,                                 # 64
+        NumBits = int(1e5),                                   # 1e5
+        NumPilotPerBlock = 32,                              # 32
         QAMModulation = QAM_MODULATION.QPSK_GRAY,
-        LengthCP = 8,
+        LengthCP = 8,                                       # 8
         SNR = np.arange(-10,11,2),
         PilotTypes = PILOT_TYPES.COMB,
         ChannelModel = CHANNEL_MODEL.RAYLEIGH,
-        NumTap = 5,
-        RegenChannel = 5,
+        NumTap = 5,                                         # 5
+        RegenChannel = 5,                                   # 5
         Estimator = CHANNEL_ESTIMATOR.LS,
         Interpolator = CHANNEL_INTERPOLATOR.LINEAR
     )

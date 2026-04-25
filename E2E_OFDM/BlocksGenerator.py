@@ -7,46 +7,77 @@ class PILOT_TYPES(Enum):
     BLOCK = "BlockTypePilot"
     COMB = "CombTypePilot"
 
-# Here says BitsGenerator is a 'block', therefore it enforces the only method called 'process'.    
 class BitsGenerator():
-    def process(self, NumBlocks: int, NumBit: int) -> np.ndarray:
-        return np.random.randint(0, 2, [NumBlocks, NumBit])
+    def __init__(self, NumBits: int) -> None:
+        self.NumBits = NumBits
+
+    def process(self) -> np.ndarray:
+        return np.random.randint(0, 2, self.NumBits)
 
 class BlockGenerators(ABC):
     def __init__(self, config):
-        self.TotalNumBlock = config.TotalNumBlock
         self.NumSubCarrier = config.NumSubCarrier
         self.NumPilotPerBlock = config.NumPilotPerBlock
-        self.BitGenerator = BitsGenerator()
-        self.PilotIndices = np.zeros((config.TotalNumBlock, config.NumSubCarrier), dtype=bool)
+        self.Modulator = SelectModulator(config.QAMModulation)
 
     @abstractmethod
-    def process(self, BitsPerSymbol: int) -> tuple:
+    def process(self, DataSymbols: np.ndarray, BitsPerSymbol: int) -> np.ndarray:
         ...
 
 class BlockTypePilot(BlockGenerators):
-    def process(self, BitsPerSymbol: int) -> tuple:
-        self.PilotIndices[0,:] = 1
-        Blocks = np.zeros([self.TotalNumBlock, self.NumSubCarrier * BitsPerSymbol], dtype=int)
+    
+    def process(self, DataSymbols: np.ndarray, BitsPerSymbol: int) -> tuple:
+        NumDataBlocks = int(np.ceil(DataSymbols.size/self.NumSubCarrier))
+        BlockShape = (1+NumDataBlocks, self.NumSubCarrier)
+        Blocks = np.zeros(BlockShape, dtype=complex)
+
         # Pilot
-        Blocks[0,:] = self.BitGenerator.process(1, self.NumSubCarrier * BitsPerSymbol)
-        # Data
-        Data = self.BitGenerator.process(self.TotalNumBlock-1, self.NumSubCarrier * BitsPerSymbol)
-        Blocks[1:,:] = Data
-        return Blocks, Data
+        PilotIndices = np.zeros(BlockShape, dtype=bool)
+        PilotIndices[0,:] = True
+
+        NumPilotBits = self.NumSubCarrier * BitsPerSymbol
+        PilotGenerator = BitsGenerator(NumPilotBits)
+        PilotBits = PilotGenerator.process()
+        Pilots = self.Modulator.modulate(PilotBits)
+        Blocks[0,:] = Pilots
+
+        # Data with zero padding to complete the last block
+        NumExtraSymbols = NumDataBlocks*self.NumSubCarrier - DataSymbols.size
+        NumExtraBits = NumExtraSymbols * BitsPerSymbol
+        ExtraBits = np.zeros(NumExtraBits)
+        ExtraSymbols = self.Modulator.modulate(ExtraBits)
+        DataSymbols = np.concat((DataSymbols, ExtraSymbols))
+        DataSymbols = DataSymbols.reshape(NumDataBlocks, self.NumSubCarrier)
+        Blocks[1:,:] = DataSymbols
+        return Blocks, PilotIndices
     
 class CombTypePilot(BlockGenerators):
-    def process(self, BitsPerSymbol: int) -> tuple:
-        self.PilotIndices[:,::self.NumSubCarrier//self.NumPilotPerBlock] = 1
-        mask = np.repeat(self.PilotIndices, BitsPerSymbol, axis=1)
-        Blocks = np.zeros([self.TotalNumBlock, self.NumSubCarrier * BitsPerSymbol], dtype=int)
-        # Pilot
-        Pilots = self.BitGenerator.process(self.TotalNumBlock, self.NumPilotPerBlock * BitsPerSymbol)
-        Blocks[mask] = Pilots.reshape(-1)
-        # Data
-        Data = self.BitGenerator.process(self.TotalNumBlock, (self.NumSubCarrier-self.NumPilotPerBlock) * BitsPerSymbol)
-        Blocks[~mask] = Data.reshape(-1)
-        return Blocks, Data
+    def process(self, DataSymbols: np.ndarray, BitsPerSymbol: int) -> tuple:
+        NumDataPerBlock = self.NumSubCarrier - self.NumPilotPerBlock
+        NumBlocks = int(np.ceil(DataSymbols.size/NumDataPerBlock))
+        BlockShape = (NumBlocks, self.NumSubCarrier)
+        Blocks = np.zeros(BlockShape, dtype=complex)
+
+        # Pilot        
+        PilotIndices = np.zeros(BlockShape, dtype=bool)
+        PilotStep = self.NumSubCarrier//self.NumPilotPerBlock
+        PilotPosition = np.arange(0, self.NumSubCarrier, PilotStep)[:self.NumPilotPerBlock]
+        PilotIndices[:,PilotPosition] = True
+
+        NumPilotBits = NumBlocks * self.NumPilotPerBlock * BitsPerSymbol
+        PilotGenerator = BitsGenerator(NumPilotBits)
+        PilotBits = PilotGenerator.process()
+        Pilots = self.Modulator.modulate(PilotBits)
+        Blocks[PilotIndices] = Pilots
+        
+        # Data with zero padding to complete the last block
+        NumExtraSymbols = NumBlocks*NumDataPerBlock - DataSymbols.size
+        NumExtraBits = NumExtraSymbols * BitsPerSymbol
+        ExtraBits = np.zeros(NumExtraBits)
+        ExtraSymbols = self.Modulator.modulate(ExtraBits)
+        DataSymbols = np.concat((DataSymbols, ExtraSymbols))
+        Blocks[~PilotIndices] = DataSymbols
+        return Blocks, PilotIndices
 
 def SelectPilotType(config) -> BlockGenerators:
     if config.PilotTypes == PILOT_TYPES.BLOCK: 
@@ -58,20 +89,26 @@ def SelectPilotType(config) -> BlockGenerators:
 if __name__ == '__main__':
 
     class blckconfig:
-        NumSubCarrier = 8,
-        TotalNumBlock = 6,
-        NumPilotPerBlock = 2,
+        TotalBits = 2000
+        TotalSymbols = 1000
+        NumSubCarrier = 9
+        TotalNumBlock = 6
+        NumPilotPerBlock = 2
         PilotTypes = PILOT_TYPES.BLOCK
+        QAMModulation = QAM_MODULATION.QPSK_GRAY
 
     class TestBlockGen():
-        def __init__(self, blckconfig, QAMMapper):
-            self.Modulator = SelectModulator(QAMMapper)
-            self.BlockGenerator = SelectPilotType(blckconfig)
+        def __init__(self, blckconfig):
+            self.BitGenerator = BitsGenerator(blckconfig.TotalBits)
+            self.Modulator = SelectModulator(blckconfig.QAMModulation)
+            self.PilotInsertion = SelectPilotType(blckconfig)
         
         def run(self):
-            Blocks = self.BlockGenerator.process(self.Modulator.bitsPerSymbol)
+            DataBits = self.BitGenerator.process()
+            DataSymbols = self.Modulator.modulate(DataBits)
+            Blocks, PilotIndices = self.PilotInsertion.process(DataSymbols, self.Modulator.bitsPerSymbol)
             return Blocks
 
-    system = TestBlockGen(blckconfig, QAM_MODULATION.QPSK_GRAY)
+    system = TestBlockGen(blckconfig)
     result = system.run()
     print(result)

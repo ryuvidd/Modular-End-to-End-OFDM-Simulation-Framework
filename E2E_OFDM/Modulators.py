@@ -31,7 +31,7 @@ class QPSKGrayCodedModulator(Modulator):
         self.bitsPerSymbol = 2
 
     def modulate(self, bits: np.ndarray) -> np.ndarray:
-        ModulatedSymbols = (2 * bits[:,::2] - 1) + 1j * (2 * bits[:,1::2] - 1)
+        ModulatedSymbols = (2 * bits[::2] - 1) + 1j * (2 * bits[1::2] - 1)
         return ModulatedSymbols
     
     def demodulate(self, symbols: np.ndarray) -> np.ndarray:
