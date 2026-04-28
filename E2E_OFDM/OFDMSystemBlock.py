@@ -31,8 +31,6 @@ class Transmitter():
         self.BitGenerator = BitsGenerator(config.NumBits)
         self.Modulator = SelectModulator(config.QAMModulation)
         self.PilotInsertion = SelectPilotType(config)
-        
-        self.BlocksGenerator = SelectPilotType(config)
         self.OFDMModulator = OFDMModulator(config.LengthCP, config.NumSubCarrier)
         self.SpectrumViewer = SpectrumAnalyzer()
 
