@@ -5,7 +5,7 @@ if __name__ == '__main__':
 
     default_config = OFDMconfig(
         NumSubCarrier = 64,                                 # 64
-        NumBits = int(1e5),                                   # 1e5
+        NumBits = int(1e3),                                 # 1e4
         NumPilotPerBlock = 32,                              # 32
         QAMModulation = QAM_MODULATION.QPSK_GRAY,
         LengthCP = 8,                                       # 8
@@ -15,7 +15,10 @@ if __name__ == '__main__':
         NumTap = 5,                                         # 5
         RegenChannel = 5,                                   # 5
         Estimator = CHANNEL_ESTIMATOR.LS,
-        Interpolator = CHANNEL_INTERPOLATOR.LINEAR
+        Interpolator = CHANNEL_INTERPOLATOR.LINEAR,
+        Equalizer = EQUALIZER.ZeroForcing,
+        ChannelCodingType = CHANNEL_ENCODER.Convolutional,
+        ChannelCodingSetting = CONVOLUTIONAL_ENCODER_CHOICE.Kis7
     )
 
     totalconfig = [

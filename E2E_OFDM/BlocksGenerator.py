@@ -46,10 +46,10 @@ class BlockTypePilot(BlockGenerators):
         NumExtraBits = NumExtraSymbols * BitsPerSymbol
         ExtraBits = np.zeros(NumExtraBits)
         ExtraSymbols = self.Modulator.modulate(ExtraBits)
-        DataSymbols = np.concat((DataSymbols, ExtraSymbols))
-        DataSymbols = DataSymbols.reshape(NumDataBlocks, self.NumSubCarrier)
-        Blocks[1:,:] = DataSymbols
-        return Blocks, PilotIndices
+        PaddedDataSymbols = np.concat((DataSymbols, ExtraSymbols))
+        PaddedDataSymbols = PaddedDataSymbols.reshape(NumDataBlocks, self.NumSubCarrier)
+        Blocks[1:,:] = PaddedDataSymbols
+        return Blocks, PaddedDataSymbols, PilotIndices
     
 class CombTypePilot(BlockGenerators):
     def process(self, DataSymbols: np.ndarray, BitsPerSymbol: int) -> tuple:
@@ -75,9 +75,9 @@ class CombTypePilot(BlockGenerators):
         NumExtraBits = NumExtraSymbols * BitsPerSymbol
         ExtraBits = np.zeros(NumExtraBits)
         ExtraSymbols = self.Modulator.modulate(ExtraBits)
-        DataSymbols = np.concat((DataSymbols, ExtraSymbols))
-        Blocks[~PilotIndices] = DataSymbols
-        return Blocks, PilotIndices
+        PaddedDataSymbols = np.concat((DataSymbols, ExtraSymbols))
+        Blocks[~PilotIndices] = PaddedDataSymbols
+        return Blocks, NumExtraBits, PilotIndices
 
 def SelectPilotType(config) -> BlockGenerators:
     if config.PilotTypes == PILOT_TYPES.BLOCK: 

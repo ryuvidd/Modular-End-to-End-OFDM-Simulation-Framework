@@ -6,6 +6,8 @@ from ChannelInterpolator import *
 from EvaluationMetric import *
 from BlocksGenerator import *
 from Equalizers import *
+from ChannelCoding import *
+from Interleaver import *
 from util import *
 
 @dataclass
@@ -19,6 +21,9 @@ class OFDMconfig:
     PilotTypes: PILOT_TYPES
     Estimator: CHANNEL_ESTIMATOR
     Interpolator: CHANNEL_INTERPOLATOR
+    Equalizer: EQUALIZER
+    ChannelCodingType: CHANNEL_ENCODER
+    ChannelCodingSetting: CONVOLUTIONAL_ENCODER_CHOICE
 
     # Channel Configuration 
     ChannelModel: CHANNEL_MODEL
@@ -29,25 +34,30 @@ class OFDMconfig:
 class Transmitter():
     def __init__(self, config) -> None:
         self.BitGenerator = BitsGenerator(config.NumBits)
+        self.ChannelEncoder = SelectChannelEncoder(config.ChannelCodingType, config.ChannelCodingSetting, config.NumBits)
+        self.Interleaver = InterleaverBlock()
         self.Modulator = SelectModulator(config.QAMModulation)
         self.PilotInsertion = SelectPilotType(config)
-        
-        self.BlocksGenerator = SelectPilotType(config)
         self.OFDMModulator = OFDMModulator(config.LengthCP, config.NumSubCarrier)
         self.SpectrumViewer = SpectrumAnalyzer()
 
     def process(self) -> tuple:
         DataBits = self.BitGenerator.process()
-        DataSymbols = self.Modulator.modulate(DataBits)
-        Blocks, PilotIndices = self.PilotInsertion.process(DataSymbols, self.Modulator.bitsPerSymbol)
+        CodedDataBits = self.ChannelEncoder.encode(DataBits)
+        InterleavedBits, NumCol, NumPaddedZeros = self.Interleaver.interleave(CodedDataBits)
+        DataSymbols = self.Modulator.modulate(InterleavedBits)
+        Blocks, NumExtraBits, PilotIndices = self.PilotInsertion.process(DataSymbols, self.Modulator.bitsPerSymbol)
         OFDMSymbols = self.OFDMModulator.modulate(Blocks)
         self.SpectrumViewer.PlotPSD(OFDMSymbols)
 
         metadata = {}
         metadata["PilotIndices"] = PilotIndices
+        metadata["NumExtraBits"] = NumExtraBits
         metadata["Blocks"] = Blocks
         metadata["DataBits"] = DataBits
         metadata["DataBitSize"] = DataBits.size
+        metadata["InterleavingShape"] = NumCol
+        metadata["InterleavingZeros"] = NumPaddedZeros
         return OFDMSymbols, metadata
     
 class ChannelBlock():
@@ -84,7 +94,9 @@ class Receiver():
         self.Demodulator = SelectModulator(config.QAMModulation)
         self.ChannelEstimator = SelectEstimator(config.Estimator)
         self.ChannelInterpolator = SelectInterpolator(config.Interpolator)
-        self.Equalizer = ZeroForcing()
+        self.Equalizer = SelectEqualizer(config.Equalizer)
+        self.Deinterleaver = InterleaverBlock()
+        self.ChannelDecoder = SelectChannelEncoder(config.ChannelCodingType, config.ChannelCodingSetting, config.NumBits)
         self.SNRs = config.SNR
         self.LengthCP = config.LengthCP
         self.NumSubCarrier = config.NumSubCarrier
@@ -119,8 +131,11 @@ class Receiver():
             # Equalization #
             RecoveredSymbols = self.Equalizer.process(EstimatedChannel, ReceivedSymbols)
             EstimatedDataSymbol = RecoveredSymbols[~PilotIndices].reshape(metadata["NumBlocks"],-1)
-            EstimatedBits_ = self.Demodulator.demodulate(EstimatedDataSymbol)
-            EstimatedBits.append(EstimatedBits_)
+            CodedEstimatedBits = self.Demodulator.demodulate(EstimatedDataSymbol)
+            CodedEstimatedBits = CodedEstimatedBits.flatten()[:-metadata["NumExtraBits"]]
+            DeinterleavedEstimatedBits = self.Deinterleaver.deinterleave(CodedEstimatedBits, metadata)
+            DecodedEstimatedBits = self.ChannelDecoder.decode(DeinterleavedEstimatedBits)
+            EstimatedBits.append(DecodedEstimatedBits)
         
         EstimatedChannels = np.stack(EstimatedChannels, axis=0)
         EstimatedBits = np.stack(EstimatedBits, axis=0)

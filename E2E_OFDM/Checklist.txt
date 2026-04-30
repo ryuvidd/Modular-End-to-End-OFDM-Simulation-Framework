@@ -1,0 +1,24 @@
+=== UPGRADE CHECK LIST ===
+
+[X] Separate classes: Tx, Channel, Rx
+[X] Add SNR sweep
+[X] Visualize performance plot
+[X] Add logging system
+[X] Extract Monte-Carlo exeriments
+[X] LMMSE estimator
+[X] Add README.md file
+[X] Add Spectral Analysis
+[ ] LaTex Report
+[ ] Evaluate the OFDM system: data rate, code capacity
+
+=== CONTINUE THE WORK ===
+Channel coding block was merged into the OFDM block, however the BER seems to be worse.
+This may due to lack of interleaver? or the flattening that makes the wrong order of data?
+
+---------------------- update resume ----------------------
+
+[ ] Add more channel model choices: Rician, 3GPP
+[ ] Add more QAM modulation techniques: 
+[ ] Add MMSE equalizer
+[ ] Add more interpolation techniques
+[ ] Complete SISO, SIMO, MISO, and MIMO

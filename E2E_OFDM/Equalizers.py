@@ -9,7 +9,7 @@ class EQUALIZER(Enum):
 class Equalizer(ABC):
 
     @abstractmethod
-    def process(self, EstimatedChannel: np.ndarray, ReceivedSignal: np.ndarray):
+    def process(self, EstimatedChannel: np.ndarray, ReceivedSignal: np.ndarray) -> np.ndarray:
         ...
 
 class ZeroForcing(Equalizer):
@@ -19,7 +19,7 @@ class ZeroForcing(Equalizer):
     
 class MMSE(Equalizer):
     def process(self, EstimatedChannel, ReceivedSignal):
-        RecoveredSymbols = ReceivedSignal / EstimatedChannel
+        RecoveredSymbols = ReceivedSignal / EstimatedChannel # to be fixed soon
         return RecoveredSymbols
     
 def SelectEqualizer(equalizer: EQUALIZER) -> Equalizer:
