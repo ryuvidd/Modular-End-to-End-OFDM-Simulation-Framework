@@ -21,12 +21,16 @@ class BlockGenerators(ABC):
         self.Modulator = SelectModulator(config.QAMModulation)
 
     @abstractmethod
-    def process(self, DataSymbols: np.ndarray, BitsPerSymbol: int) -> np.ndarray:
+    def InsertPilot(self, DataSymbols: np.ndarray, BitsPerSymbol: int) -> np.ndarray:
+        ...
+
+    @abstractmethod
+    def ExtractData(self, ReceivedBlocks: np.ndarray, PilotIndices: np.ndarray, NumDataSymbols: int) -> np.ndarray:
         ...
 
 class BlockTypePilot(BlockGenerators):
     
-    def process(self, DataSymbols: np.ndarray, BitsPerSymbol: int) -> tuple:
+    def InsertPilot(self, DataSymbols: np.ndarray, BitsPerSymbol: int) -> tuple:
         NumDataBlocks = int(np.ceil(DataSymbols.size/self.NumSubCarrier))
         BlockShape = (1+NumDataBlocks, self.NumSubCarrier)
         Blocks = np.zeros(BlockShape, dtype=complex)
@@ -49,10 +53,14 @@ class BlockTypePilot(BlockGenerators):
         PaddedDataSymbols = np.concat((DataSymbols, ExtraSymbols))
         PaddedDataSymbols = PaddedDataSymbols.reshape(NumDataBlocks, self.NumSubCarrier)
         Blocks[1:,:] = PaddedDataSymbols
-        return Blocks, PaddedDataSymbols, PilotIndices
+        return Blocks, PilotIndices
+    
+    def ExtractData(self, ReceivedBlocks: np.ndarray, PilotIndices: np.ndarray, NumDataSymbols: int) -> np.ndarray:
+        EstimatedDataSymbols = ReceivedBlocks[~PilotIndices][:NumDataSymbols]
+        return EstimatedDataSymbols
     
 class CombTypePilot(BlockGenerators):
-    def process(self, DataSymbols: np.ndarray, BitsPerSymbol: int) -> tuple:
+    def InsertPilot(self, DataSymbols: np.ndarray, BitsPerSymbol: int) -> tuple:
         NumDataPerBlock = self.NumSubCarrier - self.NumPilotPerBlock
         NumBlocks = int(np.ceil(DataSymbols.size/NumDataPerBlock))
         BlockShape = (NumBlocks, self.NumSubCarrier)
@@ -77,7 +85,11 @@ class CombTypePilot(BlockGenerators):
         ExtraSymbols = self.Modulator.modulate(ExtraBits)
         PaddedDataSymbols = np.concat((DataSymbols, ExtraSymbols))
         Blocks[~PilotIndices] = PaddedDataSymbols
-        return Blocks, NumExtraBits, PilotIndices
+        return Blocks, PilotIndices
+    
+    def ExtractData(self, ReceivedBlocks: np.ndarray, PilotIndices: np.ndarray, NumDataSymbols: int) -> np.ndarray:
+        EstimatedDataSymbols = ReceivedBlocks[~PilotIndices][:NumDataSymbols]
+        return EstimatedDataSymbols
 
 def SelectPilotType(config) -> BlockGenerators:
     if config.PilotTypes == PILOT_TYPES.BLOCK: 
@@ -106,7 +118,7 @@ if __name__ == '__main__':
         def run(self):
             DataBits = self.BitGenerator.process()
             DataSymbols = self.Modulator.modulate(DataBits)
-            Blocks, PilotIndices = self.PilotInsertion.process(DataSymbols, self.Modulator.bitsPerSymbol)
+            Blocks, PilotIndices = self.PilotInsertion.InsertPilot(DataSymbols, self.Modulator.bitsPerSymbol)
             return Blocks
 
     system = TestBlockGen(blckconfig)

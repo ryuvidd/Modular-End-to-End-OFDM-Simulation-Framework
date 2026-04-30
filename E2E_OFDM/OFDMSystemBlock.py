@@ -46,18 +46,20 @@ class Transmitter():
         CodedDataBits = self.ChannelEncoder.encode(DataBits)
         InterleavedBits, NumCol, NumPaddedZeros = self.Interleaver.interleave(CodedDataBits)
         DataSymbols = self.Modulator.modulate(InterleavedBits)
-        Blocks, NumExtraBits, PilotIndices = self.PilotInsertion.process(DataSymbols, self.Modulator.bitsPerSymbol)
+        Blocks, PilotIndices = self.PilotInsertion.InsertPilot(DataSymbols, self.Modulator.bitsPerSymbol)
         OFDMSymbols = self.OFDMModulator.modulate(Blocks)
         self.SpectrumViewer.PlotPSD(OFDMSymbols)
 
-        metadata = {}
-        metadata["PilotIndices"] = PilotIndices
-        metadata["NumExtraBits"] = NumExtraBits
-        metadata["Blocks"] = Blocks
-        metadata["DataBits"] = DataBits
-        metadata["DataBitSize"] = DataBits.size
-        metadata["InterleavingShape"] = NumCol
-        metadata["InterleavingZeros"] = NumPaddedZeros
+        metadata = {
+            "PilotIndices": PilotIndices,
+            "NumInterleavedBits": InterleavedBits.size,
+            "Blocks": Blocks,
+            "DataBits": DataBits,
+            "NumDataSymbols": DataSymbols.size,
+            "DataBitSize": DataBits.size,
+            "InterleavingShape": NumCol,
+            "InterleavingZeros": NumPaddedZeros
+        }
         return OFDMSymbols, metadata
     
 class ChannelBlock():
@@ -91,6 +93,7 @@ class ChannelBlock():
 class Receiver():
     def __init__(self, config) -> None:
         self.OFDMDemodulator = OFDMModulator(config.LengthCP, config.NumSubCarrier)
+        self.DataExtractor = SelectPilotType(config)
         self.Demodulator = SelectModulator(config.QAMModulation)
         self.ChannelEstimator = SelectEstimator(config.Estimator)
         self.ChannelInterpolator = SelectInterpolator(config.Interpolator)
@@ -119,7 +122,6 @@ class Receiver():
             VarNoise = metadata["VarNoises"][snr_ind]
             VarNoiseShape = np.arange(self.LengthCP, self.LengthCP+self.NumSubCarrier)
             NoisePower = VarNoise[np.ix_(VarNoiseShape, VarNoiseShape)]
-
             EstimationMetadata = {
                 "NoisePower": NoisePower,
                 "mean_h": mean_h,
@@ -130,11 +132,18 @@ class Receiver():
             EstimatedChannels.append(EstimatedChannel)
             # Equalization #
             RecoveredSymbols = self.Equalizer.process(EstimatedChannel, ReceivedSymbols)
-            EstimatedDataSymbol = RecoveredSymbols[~PilotIndices].reshape(metadata["NumBlocks"],-1)
-            CodedEstimatedBits = self.Demodulator.demodulate(EstimatedDataSymbol)
-            CodedEstimatedBits = CodedEstimatedBits.flatten()[:-metadata["NumExtraBits"]]
-            DeinterleavedEstimatedBits = self.Deinterleaver.deinterleave(CodedEstimatedBits, metadata)
-            DecodedEstimatedBits = self.ChannelDecoder.decode(DeinterleavedEstimatedBits)
+            EstimatedDataSymbol = self.DataExtractor.ExtractData(RecoveredSymbols, PilotIndices, metadata["NumDataSymbols"])
+            # QAM Demapping #
+            InterleavedEstimatedDataBits = self.Demodulator.demodulate(EstimatedDataSymbol)
+            # Deinterleaving
+            DeinterleavingMetadata = {
+                "NumInterleavedBits": metadata["NumInterleavedBits"],
+                "NumCol": metadata["InterleavingShape"],
+                "NumPaddedZeros": metadata["InterleavingZeros"]
+            }
+            CodedEstimatedDataBits = self.Deinterleaver.deinterleave(InterleavedEstimatedDataBits, DeinterleavingMetadata)
+            # Channel Decoding #
+            DecodedEstimatedBits = self.ChannelDecoder.decode(CodedEstimatedDataBits)
             EstimatedBits.append(DecodedEstimatedBits)
         
         EstimatedChannels = np.stack(EstimatedChannels, axis=0)

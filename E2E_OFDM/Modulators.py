@@ -38,9 +38,9 @@ class QPSKGrayCodedModulator(Modulator):
         
         EstimatedSymbols = np.sign(np.real(symbols)) + 1j*(np.sign(np.imag(symbols)))
 
-        EstimatedBits = np.empty((EstimatedSymbols.shape[0], EstimatedSymbols.shape[1]*2), dtype=int) 
-        EstimatedBits[:,0::2] = (np.real(EstimatedSymbols) + 1) / 2
-        EstimatedBits[:,1::2] = (np.imag(EstimatedSymbols) + 1) / 2
+        EstimatedBits = np.empty(symbols.size * 2, dtype=int) 
+        EstimatedBits[0::2] = (np.real(EstimatedSymbols) + 1) / 2
+        EstimatedBits[1::2] = (np.imag(EstimatedSymbols) + 1) / 2
         return EstimatedBits
 
 class BPSKModulator(Modulator):

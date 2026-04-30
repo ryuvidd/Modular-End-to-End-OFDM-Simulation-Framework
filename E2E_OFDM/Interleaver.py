@@ -16,9 +16,30 @@ class InterleaverBlock():
         return InterleavedSignal, NumCol, NumPaddedZeros
     
     def deinterleave(self, signal: np.ndarray, metadata) -> np.ndarray:
-        NumCol = metadata["InterleavingShape"]
-        NumPaddedZeros = metadata["InterleavingZeros"]
+        NumInterleavedBits = metadata["NumInterleavedBits"]
+        NumCol = metadata["NumCol"]
+        NumPaddedZeros = metadata["NumPaddedZeros"]
+
         DeinterleavingShape = (NumCol, NumCol)
+        signal = signal.flatten()[:NumInterleavedBits]
         matrix = np.reshape(signal.flatten(), DeinterleavingShape)
-        DeinterleavedSignal = matrix.T.flatten()[:-NumPaddedZeros]
+        DeinterleavedSignal = matrix.T.flatten()[:-NumPaddedZeros] if NumPaddedZeros !=0 else matrix.T.flatten()
         return DeinterleavedSignal
+    
+if __name__ == "__main__":
+    from EvaluationMetric import *
+
+    Interleaver = InterleaverBlock()
+
+    N = 10000
+    Bits = np.random.randint(0,2,N)
+    InterleavedBits, NumCol, NumPaddedZeros = Interleaver.interleave(Bits)
+    metadata = {
+        "InterleavingShape": NumCol,
+        "InterleavingZeros": NumPaddedZeros
+    }
+    DeinterleavedBits = Interleaver.deinterleave(InterleavedBits, metadata)
+
+    Eval = BER()
+    BER_ = Eval.process(DeinterleavedBits, Bits)
+    print(f"BER: {BER_}")
